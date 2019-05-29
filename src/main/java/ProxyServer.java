@@ -19,7 +19,7 @@ public class ProxyServer {
         while (true) {
             try {
                 Socket client = socket.accept();
-                logger.info("new socket bind from addr:" + client.getInetAddress());
+//                logger.info("new socket bind from addr:" + client.getInetAddress());
                 new Thread(new SocketHandle(client)).start();
             } catch (Exception e) {
                 e.printStackTrace();
@@ -53,7 +53,6 @@ class SocketHandle implements Runnable {
             StringBuilder header = new StringBuilder();
             while ((c = clientInput.read()) != -1) {
                 header.append((char) c);
-                System.out.print((char) c);
                 int len = header.length();
                 if (header.charAt(len - 1) == '\n'
                         && header.charAt(len - 2) == '\r'
@@ -67,18 +66,34 @@ class SocketHandle implements Runnable {
             if (head.length() == 0) {
                 return;
             }
+            boolean isHTTPS = false;
             logger.info(head);
-            String loc = getLoc(head);
             int port = 80;
+            String loc = getLoc(head);
             if (loc.contains(":")) {
                 String[] fields = loc.split(":");
                 port = Integer.parseInt(fields[1]);
                 loc = fields[0];
                 // TODO: Error finding the port
             }
+            if (head.contains("CONNECT")) {
+                // TODO: HTTPS request
+                port = 443;
+                isHTTPS = true;
+                socket.setKeepAlive(true);
+                clientOutput.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes());
+            }
+            logger.info("loc:" + loc + " port: " + port);
             proxySocket = new Socket(loc,port);
+            proxySocket.setKeepAlive(true);
             proxyInput = proxySocket.getInputStream();
             proxyOutput = proxySocket.getOutputStream();
+            proxyOutput.write(head.getBytes());
+            new Thread(new DataForward(proxyInput,clientOutput,socket)).start();
+            new Thread(new DataForward(clientInput,proxyOutput,proxySocket)).start();
+            if (isHTTPS) {
+                return;
+            }
             byte[] data = head.getBytes();
             proxyOutput.write(data);
             while ((c = proxyInput.read()) != -1) {
