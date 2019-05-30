@@ -19,8 +19,10 @@ public class ProxyServer {
         while (true) {
             try {
                 Socket client = socket.accept();
+                client.setKeepAlive(true);
 //                logger.info("new socket bind from addr:" + client.getInetAddress());
                 new Thread(new SocketHandle(client)).start();
+//                new Thread(new ProxyTask(client)).start();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -81,17 +83,30 @@ class SocketHandle implements Runnable {
                 port = 443;
                 isHTTPS = true;
                 socket.setKeepAlive(true);
-                clientOutput.write("HTTP/1.1 200 Connection Established\r\n\r\n".getBytes());
+                clientOutput.write("HTTP/1.1 200 Connection established\r\n\r\n".getBytes());
+                clientOutput.flush();
             }
             logger.info("loc:" + loc + " port: " + port);
             proxySocket = new Socket(loc,port);
             proxySocket.setKeepAlive(true);
             proxyInput = proxySocket.getInputStream();
             proxyOutput = proxySocket.getOutputStream();
-            proxyOutput.write(head.getBytes());
-            new Thread(new DataForward(proxyInput,clientOutput,socket)).start();
-            new Thread(new DataForward(clientInput,proxyOutput,proxySocket)).start();
+
+            Thread upload = new Thread(new DataForward(proxyInput,clientOutput,socket));
+            Thread download = new Thread(new DataForward(clientInput,proxyOutput,proxySocket));
+            upload.start();
+            download.start();
+//            proxyOutput.write(head.getBytes());
+            proxyOutput.flush();
+            upload.join();
+            download.join();
             if (isHTTPS) {
+                proxyInput.close();
+                proxyOutput.close();
+                clientInput.close();
+                clientOutput.close();
+                socket.close();
+                proxySocket.close();
                 return;
             }
             byte[] data = head.getBytes();
