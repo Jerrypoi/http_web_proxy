@@ -85,6 +85,9 @@ class SocketHandle implements Runnable {
                 socket.setKeepAlive(true);
                 clientOutput.write("HTTP/1.1 200 Connection established\r\n\r\n".getBytes());
                 clientOutput.flush();
+            } else {
+                proxyOutput.write(head.getBytes());
+                proxyOutput.flush();
             }
             logger.info("loc:" + loc + " port: " + port);
             proxySocket = new Socket(loc,port);
@@ -96,7 +99,7 @@ class SocketHandle implements Runnable {
             Thread download = new Thread(new DataForward(clientInput,proxyOutput,proxySocket));
             upload.start();
             download.start();
-//            proxyOutput.write(head.getBytes());
+//
             proxyOutput.flush();
             upload.join();
             download.join();
